@@ -1,0 +1,26 @@
+# main sources
+src/alg.cpp
+src/movie.cpp
+src/video_convert.cpp
+src/webu_json.cpp
+src/alg_sec.cpp
+src/jpegutils.cpp
+src/netcam.cpp
+src/video_loopback.cpp
+src/webu_post.cpp
+src/conf.cpp
+src/libcam.cpp
+src/picture.cpp
+src/video_v4l2.cpp
+src/webu_stream.cpp
+src/dbse.cpp
+src/logger.cpp
+src/rotate.cpp
+src/webu.cpp
+src/draw.cpp
+src/camera.cpp
+src/sound.cpp
+src/webu_file.cpp
+src/motion.cpp
+src/util.cpp
+src/webu_html.cpp

@@ -1,0 +1,14 @@
+void cls_config::dispatch_edit(const std::string& name, std::string& parm, enum PARM_ACT pact)
+{
+    /* Boolean parameters */
+
+    /* Integer parameters */
+
+    /* Float parameters */
+
+    /* String parameters */
+
+    /* List parameters */
+
+    /* Custom handlers (non-standard logic) */
+}
