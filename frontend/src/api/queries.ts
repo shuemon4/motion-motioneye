@@ -1,10 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiPost } from './client';
+import { apiGet, apiPost, apiDelete } from './client';
+import { setCsrfToken } from './csrf';
 import type {
   MotionConfig,
   Camera,
   PicturesResponse,
+  MoviesResponse,
   TemperatureResponse,
+  SystemStatus,
   AuthResponse,
 } from './types';
 
@@ -13,7 +16,9 @@ export const queryKeys = {
   config: (camId?: number) => ['config', camId] as const,
   cameras: ['cameras'] as const,
   pictures: (camId: number) => ['pictures', camId] as const,
+  movies: (camId: number) => ['movies', camId] as const,
   temperature: ['temperature'] as const,
+  systemStatus: ['systemStatus'] as const,
   auth: ['auth'] as const,
 };
 
@@ -21,7 +26,14 @@ export const queryKeys = {
 export function useMotionConfig() {
   return useQuery({
     queryKey: queryKeys.config(0),
-    queryFn: () => apiGet<MotionConfig>('/0/config'),
+    queryFn: async () => {
+      const config = await apiGet<MotionConfig>('/0/api/config');
+      // Store CSRF token from config response
+      if (config.csrf_token) {
+        setCsrfToken(config.csrf_token);
+      }
+      return config;
+    },
     staleTime: 60000, // Cache for 1 minute
   });
 }
@@ -47,12 +59,31 @@ export function usePictures(camId: number) {
   });
 }
 
+// Fetch movies for a camera
+export function useMovies(camId: number) {
+  return useQuery({
+    queryKey: queryKeys.movies(camId),
+    queryFn: () => apiGet<MoviesResponse>(`/${camId}/api/media/movies`),
+    staleTime: 30000, // Cache for 30 seconds
+  });
+}
+
 // Fetch system temperature
 export function useTemperature() {
   return useQuery({
     queryKey: queryKeys.temperature,
     queryFn: () => apiGet<TemperatureResponse>('/0/api/system/temperature'),
     refetchInterval: 30000, // Refresh every 30s
+  });
+}
+
+// Fetch system status (comprehensive)
+export function useSystemStatus() {
+  return useQuery({
+    queryKey: queryKeys.systemStatus,
+    queryFn: () => apiGet<SystemStatus>('/0/api/system/status'),
+    refetchInterval: 10000, // Refresh every 10s
+    staleTime: 5000,
   });
 }
 
@@ -86,6 +117,40 @@ export function useUpdateConfig() {
       // Invalidate config cache to refetch fresh data
       queryClient.invalidateQueries({ queryKey: queryKeys.config(camId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.cameras });
+    },
+  });
+}
+
+// Delete a picture
+export function useDeletePicture() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ camId, pictureId }: { camId: number; pictureId: number }) => {
+      return apiDelete<{ success: boolean; deleted_id: number }>(
+        `/${camId}/api/media/picture/${pictureId}`
+      );
+    },
+    onSuccess: (_, { camId }) => {
+      // Invalidate pictures cache to refetch fresh data
+      queryClient.invalidateQueries({ queryKey: queryKeys.pictures(camId) });
+    },
+  });
+}
+
+// Delete a movie
+export function useDeleteMovie() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ camId, movieId }: { camId: number; movieId: number }) => {
+      return apiDelete<{ success: boolean; deleted_id: number }>(
+        `/${camId}/api/media/movie/${movieId}`
+      );
+    },
+    onSuccess: (_, { camId }) => {
+      // Invalidate movies cache to refetch fresh data
+      queryClient.invalidateQueries({ queryKey: queryKeys.movies(camId) });
     },
   });
 }

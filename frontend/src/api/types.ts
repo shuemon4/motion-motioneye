@@ -17,6 +17,7 @@ export interface CamerasResponse {
 
 // Full config response from /0/config
 export interface MotionConfig {
+  csrf_token?: string;
   version: string;
   cameras: CamerasResponse;
   configuration: {
@@ -53,10 +54,43 @@ export interface PicturesResponse {
   pictures: MediaItem[];
 }
 
+// Movies API response from /{cam}/api/media/movies
+export interface MoviesResponse {
+  movies: MediaItem[];
+}
+
 // System temperature response from /0/api/system/temperature
 export interface TemperatureResponse {
   celsius: number;
   fahrenheit: number;
+}
+
+// System status response from /0/api/system/status
+export interface SystemStatus {
+  temperature?: {
+    celsius: number;
+    fahrenheit: number;
+  };
+  uptime?: {
+    seconds: number;
+    days: number;
+    hours: number;
+  };
+  memory?: {
+    total: number;
+    used: number;
+    free: number;
+    available: number;
+    percent: number;
+  };
+  disk?: {
+    total: number;
+    used: number;
+    free: number;
+    available: number;
+    percent: number;
+  };
+  version: string;
 }
 
 // Auth status response from /0/api/auth/me

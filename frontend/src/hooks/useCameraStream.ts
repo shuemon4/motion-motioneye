@@ -6,8 +6,8 @@ export function useCameraStream(cameraId: number) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    // MJPEG stream URL
-    const url = `/${cameraId}/stream`
+    // MJPEG stream URL - Motion uses /camId/mjpg/stream
+    const url = `/${cameraId}/mjpg/stream`
 
     // Test if stream is available
     const img = new Image()

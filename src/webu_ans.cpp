@@ -102,11 +102,12 @@ int cls_webu_ans::parseurl()
     char *tmpurl;
     size_t  pos_slash1, pos_slash2, baselen;
 
-    /* Example:  /camid/cmd1/cmd2/cmd3   */
+    /* Example:  /camid/cmd1/cmd2/cmd3/cmd4   */
     uri_cmd0 = "";
     uri_cmd1 = "";
     uri_cmd2 = "";
     uri_cmd3 = "";
+    uri_cmd4 = "";
 
     MOTION_LOG(DBG, TYPE_STREAM, NO_ERRNO, _("Sent url: %s"),url.c_str());
 
@@ -191,7 +192,17 @@ int cls_webu_ans::parseurl()
         if (pos_slash1 >= url.length()) {
             return 0;
         }
-        uri_cmd3 = url.substr(pos_slash1);
+
+        pos_slash2 = url.find("/", pos_slash1);
+        if (pos_slash2 != std::string::npos) {
+            uri_cmd3 = url.substr(pos_slash1, pos_slash2 - pos_slash1);
+            pos_slash1 = ++pos_slash2;
+            if (pos_slash1 < url.length()) {
+                uri_cmd4 = url.substr(pos_slash1);
+            }
+        } else {
+            uri_cmd3 = url.substr(pos_slash1);
+        }
     }
     return 0;
 
@@ -206,6 +217,7 @@ void cls_webu_ans::parms_edit()
         uri_cmd1 = "";
         uri_cmd2 = "";
         uri_cmd3 = "";
+        uri_cmd4 = "";
         url = "";
     }
 
@@ -231,10 +243,10 @@ void cls_webu_ans::parms_edit()
     }
 
     MOTION_LOG(DBG, TYPE_STREAM, NO_ERRNO
-        , "cmd0: >%s< cmd1: >%s< cmd2: >%s< cmd3: >%s< camindx: >%d< "
+        , "cmd0: >%s< cmd1: >%s< cmd2: >%s< cmd3: >%s< cmd4: >%s< camindx: >%d< "
         , uri_cmd0.c_str(), uri_cmd1.c_str()
         , uri_cmd2.c_str(), uri_cmd3.c_str()
-        , camindx );
+        , uri_cmd4.c_str(), camindx );
 
 }
 
@@ -792,7 +804,7 @@ void cls_webu_ans::gzip_deflate()
             , _("deflate failed: %d") ,retcd);
         gzip_size = 0;
     } else {
-        gzip_size = (ulong)zs.total_out;
+        gzip_size = (unsigned long)zs.total_out;
     }
 
     retcd = deflateEnd(&zs);
@@ -920,6 +932,52 @@ bool cls_webu_ans::valid_request()
     return true;
 }
 
+/* Answer the DELETE request from the user */
+void cls_webu_ans::answer_delete()
+{
+    MOTION_LOG(DBG, TYPE_STREAM, NO_ERRNO
+        ,"processing delete: %s",uri_cmd1.c_str());
+
+    if (valid_request() == false) {
+        bad_request();
+        return;
+    }
+
+    /* Only allow DELETE for API media endpoints */
+    if (uri_cmd1 == "api" && uri_cmd2 == "media") {
+        if (webu_json == nullptr) {
+            webu_json = new cls_webu_json(this);
+        }
+
+        /* Validate CSRF token for DELETE requests */
+        const char* csrf_token = MHD_lookup_connection_value(
+            connection, MHD_HEADER_KIND, "X-CSRF-Token");
+        if (csrf_token == nullptr || !webu->csrf_validate(std::string(csrf_token))) {
+            MOTION_LOG(ERR, TYPE_STREAM, NO_ERRNO,
+                _("CSRF token validation failed for DELETE from %s"), clientip.c_str());
+            resp_type = WEBUI_RESP_JSON;
+            resp_page = "{\"error\":\"CSRF validation failed\"}";
+            mhd_send();
+            return;
+        }
+
+        if (uri_cmd3 == "picture") {
+            webu_json->api_delete_picture();
+            mhd_send();
+        } else if (uri_cmd3 == "movie") {
+            webu_json->api_delete_movie();
+            mhd_send();
+        } else {
+            bad_request();
+        }
+    } else {
+        /* DELETE not allowed for other endpoints */
+        resp_type = WEBUI_RESP_TEXT;
+        resp_page = "HTTP 405: Method Not Allowed\n";
+        mhd_send();
+    }
+}
+
 /* Answer the get request from the user */
 void cls_webu_ans::answer_get()
 {
@@ -968,11 +1026,20 @@ void cls_webu_ans::answer_get()
         } else if (uri_cmd2 == "media" && uri_cmd3 == "pictures") {
             webu_json->api_media_pictures();
             mhd_send();
+        } else if (uri_cmd2 == "media" && uri_cmd3 == "movies") {
+            webu_json->api_media_movies();
+            mhd_send();
         } else if (uri_cmd2 == "system" && uri_cmd3 == "temperature") {
             webu_json->api_system_temperature();
             mhd_send();
+        } else if (uri_cmd2 == "system" && uri_cmd3 == "status") {
+            webu_json->api_system_status();
+            mhd_send();
         } else if (uri_cmd2 == "cameras") {
             webu_json->api_cameras();
+            mhd_send();
+        } else if (uri_cmd2 == "config") {
+            webu_json->api_config();
             mhd_send();
         } else {
             bad_request();
@@ -1087,6 +1154,9 @@ mhdrslt cls_webu_ans::answer_main(struct MHD_Connection *p_connection
             }
             cnct_method = WEBUI_METHOD_POST;
             retcd = webu_post->processor_init();
+        } else if (mystreq(method,"DELETE")) {
+            cnct_method = WEBUI_METHOD_DELETE;
+            retcd = MHD_YES;
         } else {
             cnct_method = WEBUI_METHOD_GET;
             retcd = MHD_YES;
@@ -1098,6 +1168,9 @@ mhdrslt cls_webu_ans::answer_main(struct MHD_Connection *p_connection
 
     if (mystreq(method,"POST")) {
         retcd = webu_post->processor_start(upload_data, upload_data_size);
+    } else if (mystreq(method,"DELETE")) {
+        answer_delete();
+        retcd = MHD_YES;
     } else {
         answer_get();
         retcd = MHD_YES;
@@ -1213,6 +1286,7 @@ cls_webu_ans::cls_webu_ans(cls_motapp *p_app, const char *uri)
     uri_cmd1      = "";
     uri_cmd2      = "";
     uri_cmd3      = "";
+    uri_cmd4      = "";
     clientip      = "";
     lang          = "";                          /* Two digit lang code */
 

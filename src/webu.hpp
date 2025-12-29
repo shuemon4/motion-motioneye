@@ -34,7 +34,8 @@
 
     enum WEBUI_METHOD {
         WEBUI_METHOD_GET    = 0,
-        WEBUI_METHOD_POST   = 1
+        WEBUI_METHOD_POST   = 1,
+        WEBUI_METHOD_DELETE = 2
     };
 
     enum WEBUI_CNCT {

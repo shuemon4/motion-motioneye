@@ -30,8 +30,13 @@
             /* React UI API endpoints */
             void api_auth_me();
             void api_media_pictures();
+            void api_media_movies();
+            void api_delete_picture();
+            void api_delete_movie();
             void api_system_temperature();
+            void api_system_status();
             void api_cameras();
+            void api_config();
 
         private:
             cls_motapp      *app;

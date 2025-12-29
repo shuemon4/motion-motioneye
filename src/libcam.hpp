@@ -150,6 +150,23 @@
                 ~cls_libcam();
                 int next(ctx_image_data *img_data);
                 void noimage();
+                void set_brightness(float value);
+                void set_contrast(float value);
+                void set_iso(float value);
+                void set_awb_enable(bool value);
+                void set_awb_mode(int value);
+                void set_awb_locked(bool value);
+                void set_colour_temp(int value);
+                void set_colour_gains(float red, float blue);
+                void set_af_mode(int value);
+                void set_lens_position(float value);
+                void set_af_range(int value);
+                void set_af_speed(int value);
+                void trigger_af_scan();
+                void cancel_af_scan();
+                std::map<std::string, bool> get_capability_map();
+                std::vector<std::string> get_ignored_controls();
+                void clear_ignored_controls();
             private:
                 cls_camera  *cam;
         };

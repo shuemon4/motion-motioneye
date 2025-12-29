@@ -1405,7 +1405,7 @@ void cls_libcam::set_awb_enable(bool value)
 
 void cls_libcam::set_awb_mode(int value)
 {
-
+    #ifdef HAVE_LIBCAM
         std::lock_guard<std::mutex> lock(pending_ctrls.mtx);
         pending_ctrls.awb_mode = value;
         /* When using AWB presets (not Custom), clear manual controls */
@@ -1417,27 +1417,27 @@ void cls_libcam::set_awb_mode(int value)
         pending_ctrls.dirty = true;
         MOTION_LOG(DBG, TYPE_VIDEO, NO_ERRNO
             , "Hot-reload: AWB mode set to %d (manual controls cleared)", value);
-
-
-
+    #else
+        (void)value;
+    #endif
 }
 
 void cls_libcam::set_awb_locked(bool value)
 {
-
+    #ifdef HAVE_LIBCAM
         std::lock_guard<std::mutex> lock(pending_ctrls.mtx);
         pending_ctrls.awb_locked = value;
         pending_ctrls.dirty = true;
         MOTION_LOG(DBG, TYPE_VIDEO, NO_ERRNO
             , "Hot-reload: AWB locked set to %s", value ? "true" : "false");
-
-
-
+    #else
+        (void)value;
+    #endif
 }
 
 void cls_libcam::set_colour_temp(int value)
 {
-
+    #ifdef HAVE_LIBCAM
         std::lock_guard<std::mutex> lock(pending_ctrls.mtx);
         pending_ctrls.colour_temp = value;
         /* Mutual exclusivity: temperature and gains cannot both be active */
@@ -1448,14 +1448,14 @@ void cls_libcam::set_colour_temp(int value)
         pending_ctrls.dirty = true;
         MOTION_LOG(DBG, TYPE_VIDEO, NO_ERRNO
             , "Hot-reload: Colour temperature set to %dK (gains cleared)", value);
-
-
-
+    #else
+        (void)value;
+    #endif
 }
 
 void cls_libcam::set_colour_gains(float red, float blue)
 {
-
+    #ifdef HAVE_LIBCAM
         std::lock_guard<std::mutex> lock(pending_ctrls.mtx);
         pending_ctrls.colour_gain_r = red;
         pending_ctrls.colour_gain_b = blue;
@@ -1466,14 +1466,14 @@ void cls_libcam::set_colour_gains(float red, float blue)
         pending_ctrls.dirty = true;
         MOTION_LOG(DBG, TYPE_VIDEO, NO_ERRNO
             , "Hot-reload: Colour gains set to R=%.2f, B=%.2f (temp cleared)", red, blue);
-
+    #else
         (void)red; (void)blue;
-
+    #endif
 }
 
 void cls_libcam::set_af_mode(int value)
 {
-
+    #ifdef HAVE_LIBCAM
         std::lock_guard<std::mutex> lock(pending_ctrls.mtx);
         pending_ctrls.af_mode = value;
         pending_ctrls.dirty = true;
@@ -1481,28 +1481,28 @@ void cls_libcam::set_af_mode(int value)
             , "Hot-reload: AF mode set to %d (%s)"
             , value
             , value == 0 ? "Manual" : value == 1 ? "Auto" : "Continuous");
-
-
-
+    #else
+        (void)value;
+    #endif
 }
 
 void cls_libcam::set_lens_position(float value)
 {
-
+    #ifdef HAVE_LIBCAM
         std::lock_guard<std::mutex> lock(pending_ctrls.mtx);
         pending_ctrls.lens_position = value;
         pending_ctrls.dirty = true;
         MOTION_LOG(DBG, TYPE_VIDEO, NO_ERRNO
             , "Hot-reload: Lens position set to %.2f dioptres (focus at %.2fm)"
             , value, value > 0 ? 1.0f / value : INFINITY);
-
-
-
+    #else
+        (void)value;
+    #endif
 }
 
 void cls_libcam::set_af_range(int value)
 {
-
+    #ifdef HAVE_LIBCAM
         std::lock_guard<std::mutex> lock(pending_ctrls.mtx);
         pending_ctrls.af_range = value;
         pending_ctrls.dirty = true;
@@ -1510,72 +1510,71 @@ void cls_libcam::set_af_range(int value)
             , "Hot-reload: AF range set to %d (%s)"
             , value
             , value == 0 ? "Normal" : value == 1 ? "Macro" : "Full");
-
-
-
+    #else
+        (void)value;
+    #endif
 }
 
 void cls_libcam::set_af_speed(int value)
 {
-
+    #ifdef HAVE_LIBCAM
         std::lock_guard<std::mutex> lock(pending_ctrls.mtx);
         pending_ctrls.af_speed = value;
         pending_ctrls.dirty = true;
         MOTION_LOG(DBG, TYPE_VIDEO, NO_ERRNO
             , "Hot-reload: AF speed set to %d (%s)"
             , value, value == 0 ? "Normal" : "Fast");
-
-
-
+    #else
+        (void)value;
+    #endif
 }
 
 void cls_libcam::trigger_af_scan()
 {
-
+    #ifdef HAVE_LIBCAM
         std::lock_guard<std::mutex> lock(pending_ctrls.mtx);
         pending_ctrls.af_trigger = true;
         pending_ctrls.dirty = true;
         MOTION_LOG(DBG, TYPE_VIDEO, NO_ERRNO
             , "Hot-reload: AF scan triggered");
-
-
-
+    #else
+        // No-op when libcam not available
+    #endif
 }
 
 void cls_libcam::cancel_af_scan()
 {
-
+    #ifdef HAVE_LIBCAM
         std::lock_guard<std::mutex> lock(pending_ctrls.mtx);
         pending_ctrls.af_cancel = true;
         pending_ctrls.dirty = true;
         MOTION_LOG(DBG, TYPE_VIDEO, NO_ERRNO
             , "Hot-reload: AF scan cancelled");
-
-
-
+    #else
+        // No-op when libcam not available
+    #endif
 }
 
 void cls_libcam::apply_pending_controls()
 {
-    /* Note: libcamera 0.5.2 doesn't have Camera::setControls().
-     * Controls are applied via requests. For now, we'll apply them
-     * on the next queued request in req_add(). The dirty flag signals
-     * that controls should be updated on next request.
-     */
-    std::lock_guard<std::mutex> lock(pending_ctrls.mtx);
-    if (pending_ctrls.dirty) {
-        MOTION_LOG(INF, TYPE_VIDEO, NO_ERRNO
-            , "Brightness/Contrast/ISO update pending: brightness=%.2f, contrast=%.2f, iso=%.0f"
-            , pending_ctrls.brightness, pending_ctrls.contrast, pending_ctrls.iso);
-    }
+    #ifdef HAVE_LIBCAM
+        /* Note: libcamera 0.5.2 doesn't have Camera::setControls().
+         * Controls are applied via requests. For now, we'll apply them
+         * on the next queued request in req_add(). The dirty flag signals
+         * that controls should be updated on next request.
+         */
+        std::lock_guard<std::mutex> lock(pending_ctrls.mtx);
+        if (pending_ctrls.dirty) {
+            MOTION_LOG(INF, TYPE_VIDEO, NO_ERRNO
+                , "Brightness/Contrast/ISO update pending: brightness=%.2f, contrast=%.2f, iso=%.0f"
+                , pending_ctrls.brightness, pending_ctrls.contrast, pending_ctrls.iso);
+        }
+    #endif
 }
-
-#endif
 
 void cls_libcam::noimage()
 {
     #ifdef HAVE_LIBCAM
-
         int slp_dur;
 
         if (reconnect_count < 100) {
@@ -1713,25 +1712,4 @@ cls_libcam::~cls_libcam()
     #endif
     cam->device_status = STATUS_CLOSED;
 }
-
-#ifndef HAVE_LIBCAM
-/* Stub implementations for libcam hot-reload methods when libcam is not available */
-void cls_libcam::set_brightness(float value) { (void)value; }
-void cls_libcam::set_contrast(float value) { (void)value; }
-void cls_libcam::set_iso(float value) { (void)value; }
-void cls_libcam::set_awb_enable(bool value) { (void)value; }
-void cls_libcam::set_awb_mode(int value) { (void)value; }
-void cls_libcam::set_awb_locked(bool value) { (void)value; }
-void cls_libcam::set_colour_temp(int value) { (void)value; }
-void cls_libcam::set_colour_gains(float red, float blue) { (void)red; (void)blue; }
-void cls_libcam::set_af_mode(int value) { (void)value; }
-void cls_libcam::set_lens_position(float value) { (void)value; }
-void cls_libcam::set_af_range(int value) { (void)value; }
-void cls_libcam::set_af_speed(int value) { (void)value; }
-void cls_libcam::trigger_af_scan() {}
-void cls_libcam::cancel_af_scan() {}
-std::map<std::string, bool> cls_libcam::get_capability_map() { return std::map<std::string, bool>(); }
-std::vector<std::string> cls_libcam::get_ignored_controls() { return std::vector<std::string>(); }
-void cls_libcam::clear_ignored_controls() {}
-#endif
 

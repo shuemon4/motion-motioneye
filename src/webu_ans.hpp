@@ -33,10 +33,11 @@
             std::string     lang;           /* Two character abbreviation for locale language*/
 
             std::string     url;            /* The URL sent from the client */
-            std::string     uri_cmd0;       /* Parsed command1 from the url eg /cmd0/cmd1/cmd2/cmd3 */
-            std::string     uri_cmd1;       /* Parsed command1 from the url eg /cmd0/cmd1/cmd2/cmd3 */
-            std::string     uri_cmd2;       /* Parsed command2 from the url eg /cmd0/cmd1/cmd2/cmd3 */
-            std::string     uri_cmd3;       /* Parsed command3 from the url eg /cmd0/cmd1/cmd2/cmd3 */
+            std::string     uri_cmd0;       /* Parsed command from the url eg /cmd0/cmd1/cmd2/cmd3/cmd4 */
+            std::string     uri_cmd1;       /* Parsed command from the url eg /cmd0/cmd1/cmd2/cmd3/cmd4 */
+            std::string     uri_cmd2;       /* Parsed command from the url eg /cmd0/cmd1/cmd2/cmd3/cmd4 */
+            std::string     uri_cmd3;       /* Parsed command from the url eg /cmd0/cmd1/cmd2/cmd3/cmd4 */
+            std::string     uri_cmd4;       /* Parsed command from the url eg /cmd0/cmd1/cmd2/cmd3/cmd4 */
 
             enum WEBUI_RESP resp_type;      /* indicator for the type of response to provide. */
             std::string     resp_page;      /* The response that will be sent */
@@ -73,7 +74,7 @@
             bool            auth_is_ha1;    /* Boolean for whether auth_pass is HA1 hash (32 hex chars) */
             enum WEBUI_METHOD   cnct_method;    /* Connection method.  Get or Post */
             u_char  *gzip_resp;     /* Response in gzip format */
-            ulong    gzip_size;     /* Size of response in gzip format */
+            unsigned long    gzip_size;     /* Size of response in gzip format */
 
             int check_tls();
             void parms_edit();
@@ -91,6 +92,7 @@
             mhdrslt mhd_auth();
             void deinit_counter();
             void answer_get();
+            void answer_delete();
             void gzip_deflate();
 
     };

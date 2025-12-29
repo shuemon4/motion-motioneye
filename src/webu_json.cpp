@@ -27,6 +27,7 @@
 #include "dbse.hpp"
 #include "libcam.hpp"
 #include <map>
+#include <sys/statvfs.h>
 
 std::string cls_webu_json::escstr(std::string invar)
 {
@@ -104,7 +105,7 @@ void cls_webu_json::parms_item(cls_config *conf, int indx_parm)
 
     parm_orig = "";
     parm_val = "";
-    parm_list = "";
+    parm_list = "[]";  // Default to empty JSON array for valid JSON
 
     if (app->cfg->webcontrol_parms < PARM_LEVEL_LIMITED) {
         parm_enable = "false";
@@ -857,6 +858,222 @@ void cls_webu_json::api_media_pictures()
 }
 
 /*
+ * React UI API: Delete a picture file
+ * DELETE /{camId}/api/media/picture/{id}
+ * Deletes both the file and database record
+ */
+void cls_webu_json::api_delete_picture()
+{
+    int indx;
+    std::string sql, full_path;
+    vec_files flst;
+
+    if (webua->cam == nullptr) {
+        webua->resp_page = "{\"error\":\"Camera not specified\"}";
+        webua->resp_type = WEBUI_RESP_JSON;
+        return;
+    }
+
+    /* Check if delete action is enabled */
+    for (indx=0; indx<webu->wb_actions->params_cnt; indx++) {
+        if (webu->wb_actions->params_array[indx].param_name == "delete") {
+            if (webu->wb_actions->params_array[indx].param_value == "off") {
+                MOTION_LOG(INF, TYPE_ALL, NO_ERRNO, "Delete action disabled");
+                webua->resp_page = "{\"error\":\"Delete action is disabled\"}";
+                webua->resp_type = WEBUI_RESP_JSON;
+                return;
+            }
+            break;
+        }
+    }
+
+    /* Get file ID from URI: uri_cmd4 contains the record ID */
+    if (webua->uri_cmd4.empty()) {
+        webua->resp_page = "{\"error\":\"File ID required\"}";
+        webua->resp_type = WEBUI_RESP_JSON;
+        return;
+    }
+
+    int file_id = mtoi(webua->uri_cmd4);
+    if (file_id <= 0) {
+        webua->resp_page = "{\"error\":\"Invalid file ID\"}";
+        webua->resp_type = WEBUI_RESP_JSON;
+        return;
+    }
+
+    /* Look up the file in database */
+    sql  = " select * from motion ";
+    sql += " where record_id = " + std::to_string(file_id);
+    sql += " and device_id = " + std::to_string(webua->cam->cfg->device_id);
+    sql += " and file_typ = '1'";  /* 1 = picture */
+    app->dbse->filelist_get(sql, flst);
+
+    if (flst.empty()) {
+        webua->resp_page = "{\"error\":\"File not found\"}";
+        webua->resp_type = WEBUI_RESP_JSON;
+        return;
+    }
+
+    /* Security: Validate file path to prevent directory traversal */
+    full_path = flst[0].full_nm;
+    if (full_path.find("..") != std::string::npos) {
+        MOTION_LOG(ERR, TYPE_STREAM, NO_ERRNO,
+            _("Path traversal attempt blocked: %s from %s"),
+            full_path.c_str(), webua->clientip.c_str());
+        webua->resp_page = "{\"error\":\"Invalid file path\"}";
+        webua->resp_type = WEBUI_RESP_JSON;
+        return;
+    }
+
+    /* Delete the file from filesystem */
+    if (remove(full_path.c_str()) != 0 && errno != ENOENT) {
+        MOTION_LOG(ERR, TYPE_STREAM, NO_ERRNO,
+            _("Failed to delete file: %s"), full_path.c_str());
+        webua->resp_page = "{\"error\":\"Failed to delete file\"}";
+        webua->resp_type = WEBUI_RESP_JSON;
+        return;
+    }
+
+    /* Delete from database */
+    sql  = "delete from motion where record_id = " + std::to_string(file_id);
+    app->dbse->exec_sql(sql);
+
+    MOTION_LOG(INF, TYPE_ALL, NO_ERRNO,
+        "Deleted picture: %s (id=%d) by %s",
+        flst[0].file_nm.c_str(), file_id, webua->clientip.c_str());
+
+    webua->resp_page = "{\"success\":true,\"deleted_id\":" + std::to_string(file_id) + "}";
+    webua->resp_type = WEBUI_RESP_JSON;
+}
+
+/*
+ * React UI API: Delete a movie file
+ * DELETE /{camId}/api/media/movie/{id}
+ * Deletes both the file and database record
+ */
+void cls_webu_json::api_delete_movie()
+{
+    int indx;
+    std::string sql, full_path;
+    vec_files flst;
+
+    if (webua->cam == nullptr) {
+        webua->resp_page = "{\"error\":\"Camera not specified\"}";
+        webua->resp_type = WEBUI_RESP_JSON;
+        return;
+    }
+
+    /* Check if delete action is enabled */
+    for (indx=0; indx<webu->wb_actions->params_cnt; indx++) {
+        if (webu->wb_actions->params_array[indx].param_name == "delete") {
+            if (webu->wb_actions->params_array[indx].param_value == "off") {
+                MOTION_LOG(INF, TYPE_ALL, NO_ERRNO, "Delete action disabled");
+                webua->resp_page = "{\"error\":\"Delete action is disabled\"}";
+                webua->resp_type = WEBUI_RESP_JSON;
+                return;
+            }
+            break;
+        }
+    }
+
+    /* Get file ID from URI: uri_cmd4 contains the record ID */
+    if (webua->uri_cmd4.empty()) {
+        webua->resp_page = "{\"error\":\"File ID required\"}";
+        webua->resp_type = WEBUI_RESP_JSON;
+        return;
+    }
+
+    int file_id = mtoi(webua->uri_cmd4);
+    if (file_id <= 0) {
+        webua->resp_page = "{\"error\":\"Invalid file ID\"}";
+        webua->resp_type = WEBUI_RESP_JSON;
+        return;
+    }
+
+    /* Look up the file in database */
+    sql  = " select * from motion ";
+    sql += " where record_id = " + std::to_string(file_id);
+    sql += " and device_id = " + std::to_string(webua->cam->cfg->device_id);
+    sql += " and file_typ = '2'";  /* 2 = movie */
+    app->dbse->filelist_get(sql, flst);
+
+    if (flst.empty()) {
+        webua->resp_page = "{\"error\":\"File not found\"}";
+        webua->resp_type = WEBUI_RESP_JSON;
+        return;
+    }
+
+    /* Security: Validate file path to prevent directory traversal */
+    full_path = flst[0].full_nm;
+    if (full_path.find("..") != std::string::npos) {
+        MOTION_LOG(ERR, TYPE_STREAM, NO_ERRNO,
+            _("Path traversal attempt blocked: %s from %s"),
+            full_path.c_str(), webua->clientip.c_str());
+        webua->resp_page = "{\"error\":\"Invalid file path\"}";
+        webua->resp_type = WEBUI_RESP_JSON;
+        return;
+    }
+
+    /* Delete the file from filesystem */
+    if (remove(full_path.c_str()) != 0 && errno != ENOENT) {
+        MOTION_LOG(ERR, TYPE_STREAM, NO_ERRNO,
+            _("Failed to delete file: %s"), full_path.c_str());
+        webua->resp_page = "{\"error\":\"Failed to delete file\"}";
+        webua->resp_type = WEBUI_RESP_JSON;
+        return;
+    }
+
+    /* Delete from database */
+    sql  = "delete from motion where record_id = " + std::to_string(file_id);
+    app->dbse->exec_sql(sql);
+
+    MOTION_LOG(INF, TYPE_ALL, NO_ERRNO,
+        "Deleted movie: %s (id=%d) by %s",
+        flst[0].file_nm.c_str(), file_id, webua->clientip.c_str());
+
+    webua->resp_page = "{\"success\":true,\"deleted_id\":" + std::to_string(file_id) + "}";
+    webua->resp_type = WEBUI_RESP_JSON;
+}
+
+/*
+ * React UI API: List movies
+ * Returns list of movie files from database
+ */
+void cls_webu_json::api_media_movies()
+{
+    vec_files flst;
+    std::string sql;
+
+    if (webua->cam == nullptr) {
+        webua->bad_request();
+        return;
+    }
+
+    sql  = " select * from motion ";
+    sql += " where device_id = " + std::to_string(webua->cam->cfg->device_id);
+    sql += " and file_typ = '2'";  /* 2 = movie */
+    sql += " order by file_dtl desc, file_tml desc";
+    sql += " limit 100;";
+
+    app->dbse->filelist_get(sql, flst);
+
+    webua->resp_page = "{\"movies\":[";
+    for (size_t i = 0; i < flst.size(); i++) {
+        if (i > 0) webua->resp_page += ",";
+        webua->resp_page += "{";
+        webua->resp_page += "\"id\":" + std::to_string(flst[i].record_id) + ",";
+        webua->resp_page += "\"filename\":\"" + escstr(flst[i].file_nm) + "\",";
+        webua->resp_page += "\"path\":\"" + escstr(flst[i].full_nm) + "\",";
+        webua->resp_page += "\"date\":\"" + std::to_string(flst[i].file_dtl) + "\",";
+        webua->resp_page += "\"time\":\"" + escstr(flst[i].file_tml) + "\",";
+        webua->resp_page += "\"size\":" + std::to_string(flst[i].file_sz);
+        webua->resp_page += "}";
+    }
+    webua->resp_page += "]}";
+    webua->resp_type = WEBUI_RESP_JSON;
+}
+
+/*
  * React UI API: System temperature
  * Returns CPU temperature (Raspberry Pi)
  */
@@ -879,6 +1096,95 @@ void cls_webu_json::api_system_temperature()
     } else {
         webua->resp_page += "\"error\":\"Temperature not available\"";
     }
+
+    webua->resp_page += "}";
+    webua->resp_type = WEBUI_RESP_JSON;
+}
+
+/*
+ * React UI API: System status
+ * Returns comprehensive system information (CPU temp, disk, memory, uptime)
+ */
+void cls_webu_json::api_system_status()
+{
+    FILE *file;
+    char buffer[256];
+    int temp_raw;
+    double temp_celsius;
+    unsigned long uptime_sec, mem_total, mem_free, mem_available;
+    struct statvfs fs_stat;
+
+    webua->resp_page = "{";
+
+    /* CPU Temperature */
+    file = fopen("/sys/class/thermal/thermal_zone0/temp", "r");
+    if (file != nullptr) {
+        if (fscanf(file, "%d", &temp_raw) == 1) {
+            temp_celsius = temp_raw / 1000.0;
+            webua->resp_page += "\"temperature\":{";
+            webua->resp_page += "\"celsius\":" + std::to_string(temp_celsius) + ",";
+            webua->resp_page += "\"fahrenheit\":" + std::to_string(temp_celsius * 9.0 / 5.0 + 32.0);
+            webua->resp_page += "},";
+        }
+        fclose(file);
+    }
+
+    /* System Uptime */
+    file = fopen("/proc/uptime", "r");
+    if (file != nullptr) {
+        if (fscanf(file, "%lu", &uptime_sec) == 1) {
+            webua->resp_page += "\"uptime\":{";
+            webua->resp_page += "\"seconds\":" + std::to_string(uptime_sec) + ",";
+            webua->resp_page += "\"days\":" + std::to_string(uptime_sec / 86400) + ",";
+            webua->resp_page += "\"hours\":" + std::to_string((uptime_sec % 86400) / 3600);
+            webua->resp_page += "},";
+        }
+        fclose(file);
+    }
+
+    /* Memory Information */
+    file = fopen("/proc/meminfo", "r");
+    if (file != nullptr) {
+        mem_total = mem_free = mem_available = 0;
+        while (fgets(buffer, sizeof(buffer), file)) {
+            if (sscanf(buffer, "MemTotal: %lu kB", &mem_total) == 1) continue;
+            if (sscanf(buffer, "MemFree: %lu kB", &mem_free) == 1) continue;
+            if (sscanf(buffer, "MemAvailable: %lu kB", &mem_available) == 1) break;
+        }
+        fclose(file);
+
+        if (mem_total > 0) {
+            unsigned long mem_used = mem_total - mem_available;
+            double mem_percent = (double)mem_used / mem_total * 100.0;
+            webua->resp_page += "\"memory\":{";
+            webua->resp_page += "\"total\":" + std::to_string(mem_total * 1024) + ",";
+            webua->resp_page += "\"used\":" + std::to_string(mem_used * 1024) + ",";
+            webua->resp_page += "\"free\":" + std::to_string(mem_free * 1024) + ",";
+            webua->resp_page += "\"available\":" + std::to_string(mem_available * 1024) + ",";
+            webua->resp_page += "\"percent\":" + std::to_string(mem_percent);
+            webua->resp_page += "},";
+        }
+    }
+
+    /* Disk Usage (root filesystem) */
+    if (statvfs("/", &fs_stat) == 0) {
+        unsigned long long total_bytes = (unsigned long long)fs_stat.f_blocks * fs_stat.f_frsize;
+        unsigned long long free_bytes = (unsigned long long)fs_stat.f_bfree * fs_stat.f_frsize;
+        unsigned long long avail_bytes = (unsigned long long)fs_stat.f_bavail * fs_stat.f_frsize;
+        unsigned long long used_bytes = total_bytes - free_bytes;
+        double disk_percent = (double)used_bytes / total_bytes * 100.0;
+
+        webua->resp_page += "\"disk\":{";
+        webua->resp_page += "\"total\":" + std::to_string(total_bytes) + ",";
+        webua->resp_page += "\"used\":" + std::to_string(used_bytes) + ",";
+        webua->resp_page += "\"free\":" + std::to_string(free_bytes) + ",";
+        webua->resp_page += "\"available\":" + std::to_string(avail_bytes) + ",";
+        webua->resp_page += "\"percent\":" + std::to_string(disk_percent);
+        webua->resp_page += "},";
+    }
+
+    /* Motion Version */
+    webua->resp_page += "\"version\":\"" + escstr(VERSION) + "\"";
 
     webua->resp_page += "}";
     webua->resp_type = WEBUI_RESP_JSON;
@@ -919,6 +1225,36 @@ void cls_webu_json::api_cameras()
 
     webua->resp_page += "]}";
     webua->resp_type = WEBUI_RESP_JSON;
+}
+
+/*
+ * React UI API: Configuration
+ * Returns full Motion configuration including parameters and categories
+ * Includes CSRF token for React UI authentication
+ */
+void cls_webu_json::api_config()
+{
+    webua->resp_type = WEBUI_RESP_JSON;
+
+    /* Add CSRF token at the start of the response */
+    webua->resp_page = "{\"csrf_token\":\"" + webu->csrf_token + "\"";
+
+    /* Add version - config() normally starts with { so we skip it */
+    webua->resp_page += ",\"version\" : \"" VERSION "\"";
+
+    /* Add cameras list */
+    webua->resp_page += ",\"cameras\" : ";
+    cameras_list();
+
+    /* Add configuration parameters */
+    webua->resp_page += ",\"configuration\" : ";
+    parms_all();
+
+    /* Add categories */
+    webua->resp_page += ",\"categories\" : ";
+    categories_list();
+
+    webua->resp_page += "}";
 }
 
 void cls_webu_json::main()
