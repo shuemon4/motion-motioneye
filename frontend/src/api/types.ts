@@ -3,6 +3,8 @@ export interface Camera {
   id: number;
   name: string;
   url: string;
+  width?: number;
+  height?: number;
   all_xpct_st?: number;
   all_xpct_en?: number;
   all_ypct_st?: number;

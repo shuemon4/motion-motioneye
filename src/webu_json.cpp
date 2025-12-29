@@ -26,6 +26,7 @@
 #include "webu_json.hpp"
 #include "dbse.hpp"
 #include "libcam.hpp"
+#include "json_parse.hpp"
 #include <map>
 #include <sys/statvfs.h>
 
@@ -1255,6 +1256,122 @@ void cls_webu_json::api_config()
     categories_list();
 
     webua->resp_page += "}";
+}
+
+/*
+ * React UI API: Batch Configuration Update
+ * PATCH /0/api/config with JSON body containing multiple parameters
+ * Returns detailed results for each parameter change
+ */
+void cls_webu_json::api_config_patch()
+{
+    webua->resp_type = WEBUI_RESP_JSON;
+
+    /* Validate CSRF token */
+    const char* csrf_token = MHD_lookup_connection_value(
+        webua->connection, MHD_HEADER_KIND, "X-CSRF-Token");
+    if (csrf_token == nullptr || !webu->csrf_validate(std::string(csrf_token))) {
+        MOTION_LOG(ERR, TYPE_STREAM, NO_ERRNO,
+            _("CSRF token validation failed for PATCH from %s"), webua->clientip.c_str());
+        webua->resp_page = "{\"status\":\"error\",\"message\":\"CSRF validation failed\"}";
+        return;
+    }
+
+    /* Parse JSON body */
+    JsonParser parser;
+    if (!parser.parse(webua->raw_body)) {
+        MOTION_LOG(ERR, TYPE_STREAM, NO_ERRNO,
+            _("JSON parse error: %s"), parser.getError().c_str());
+        webua->resp_page = "{\"status\":\"error\",\"message\":\"Invalid JSON: " +
+                          parser.getError() + "\"}";
+        return;
+    }
+
+    /* Get config for this camera/device */
+    cls_config *cfg;
+    if (webua->cam != nullptr) {
+        cfg = webua->cam->cfg;
+    } else {
+        cfg = app->cfg;
+    }
+
+    /* Start response */
+    webua->resp_page = "{\"status\":\"ok\",\"applied\":[";
+    bool first_item = true;
+    int success_count = 0;
+    int error_count = 0;
+
+    /* Process each parameter */
+    pthread_mutex_lock(&app->mutex_post);
+    for (const auto& kv : parser.getAll()) {
+        std::string parm_name = kv.first;
+        std::string parm_val = parser.getString(parm_name);
+        std::string old_val;
+        int parm_index = -1;
+        bool applied = false;
+        bool hot_reload = false;
+        bool unchanged = false;
+        std::string error_msg;
+
+        /* SECURITY: Reject SQL parameter modifications */
+        if (parm_name.substr(0, 4) == "sql_") {
+            error_msg = "SQL parameters cannot be modified via web interface (security restriction)";
+            error_count++;
+        }
+        /* Validate parameter exists and check if hot-reloadable */
+        else if (!validate_hot_reload(parm_name, parm_index)) {
+            if (parm_index >= 0) {
+                error_msg = "Parameter requires daemon restart";
+            } else {
+                error_msg = "Unknown parameter";
+            }
+            error_count++;
+        }
+        /* Apply the change */
+        else {
+            cfg->edit_get(parm_name, old_val, config_parms[parm_index].parm_cat);
+
+            /* Check if value actually changed */
+            if (old_val == parm_val) {
+                unchanged = true;
+            } else {
+                apply_hot_reload(parm_index, parm_val);
+                applied = true;
+            }
+            hot_reload = true;
+            success_count++;
+        }
+
+        /* Add this parameter to response */
+        if (!first_item) {
+            webua->resp_page += ",";
+        }
+        first_item = false;
+
+        webua->resp_page += "{\"param\":\"" + parm_name + "\"";
+        webua->resp_page += ",\"old\":\"" + escstr(old_val) + "\"";
+        webua->resp_page += ",\"new\":\"" + escstr(parm_val) + "\"";
+
+        if (unchanged) {
+            webua->resp_page += ",\"unchanged\":true";
+        } else if (applied) {
+            webua->resp_page += ",\"hot_reload\":" + std::string(hot_reload ? "true" : "false");
+        }
+
+        if (!error_msg.empty()) {
+            webua->resp_page += ",\"error\":\"" + escstr(error_msg) + "\"";
+        }
+
+        webua->resp_page += "}";
+    }
+    pthread_mutex_unlock(&app->mutex_post);
+
+    webua->resp_page += "]";
+    webua->resp_page += ",\"summary\":{";
+    webua->resp_page += "\"total\":" + std::to_string(success_count + error_count);
+    webua->resp_page += ",\"success\":" + std::to_string(success_count);
+    webua->resp_page += ",\"errors\":" + std::to_string(error_count);
+    webua->resp_page += "}}";
 }
 
 void cls_webu_json::main()

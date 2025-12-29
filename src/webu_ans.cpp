@@ -1154,6 +1154,10 @@ mhdrslt cls_webu_ans::answer_main(struct MHD_Connection *p_connection
             }
             cnct_method = WEBUI_METHOD_POST;
             retcd = webu_post->processor_init();
+        } else if (mystreq(method,"PATCH")) {
+            cnct_method = WEBUI_METHOD_PATCH;
+            raw_body.clear();  /* Clear body buffer for new PATCH request */
+            retcd = MHD_YES;
         } else if (mystreq(method,"DELETE")) {
             cnct_method = WEBUI_METHOD_DELETE;
             retcd = MHD_YES;
@@ -1168,6 +1172,37 @@ mhdrslt cls_webu_ans::answer_main(struct MHD_Connection *p_connection
 
     if (mystreq(method,"POST")) {
         retcd = webu_post->processor_start(upload_data, upload_data_size);
+    } else if (mystreq(method,"PATCH")) {
+        /* Accumulate raw body for JSON endpoints */
+        if (*upload_data_size > 0) {
+            MOTION_LOG(DBG, TYPE_STREAM, NO_ERRNO
+                , "PATCH: Accumulating %zu bytes, total now %zu"
+                , *upload_data_size, raw_body.length() + *upload_data_size);
+            raw_body.append(upload_data, *upload_data_size);
+            *upload_data_size = 0;
+            return MHD_YES;
+        }
+        /* Body complete, process request */
+        MOTION_LOG(DBG, TYPE_STREAM, NO_ERRNO
+            , "PATCH: Body complete (%zu bytes), processing %s/%s"
+            , raw_body.length(), uri_cmd1.c_str(), uri_cmd2.c_str());
+        if (uri_cmd1 == "api" && uri_cmd2 == "config") {
+            if (webu_json == nullptr) {
+                webu_json = new cls_webu_json(this);
+            }
+            webu_json->api_config_patch();
+            MOTION_LOG(DBG, TYPE_STREAM, NO_ERRNO
+                , "PATCH: api_config_patch() completed, sending response (%zu bytes)"
+                , resp_page.length());
+            mhd_send();
+            MOTION_LOG(DBG, TYPE_STREAM, NO_ERRNO, "PATCH: mhd_send() completed");
+        } else {
+            MOTION_LOG(ERR, TYPE_STREAM, NO_ERRNO
+                , "PATCH: Bad request - cmd1=%s cmd2=%s"
+                , uri_cmd1.c_str(), uri_cmd2.c_str());
+            bad_request();
+        }
+        retcd = MHD_YES;
     } else if (mystreq(method,"DELETE")) {
         answer_delete();
         retcd = MHD_YES;

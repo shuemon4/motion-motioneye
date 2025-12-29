@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { apiGet } from '@/api/client'
 import { FormSection, FormInput, FormSelect, FormToggle } from '@/components/form'
 import { useToast } from '@/components/Toast'
-import { useUpdateConfig } from '@/api/queries'
+import { useBatchUpdateConfig } from '@/api/queries'
 import { validateConfigParam } from '@/lib/validation'
 
 interface MotionConfig {
@@ -36,7 +36,7 @@ export function Settings() {
     queryFn: () => apiGet<MotionConfig>('/0/api/config'),
   })
 
-  const updateConfigMutation = useUpdateConfig()
+  const batchUpdateConfigMutation = useBatchUpdateConfig()
 
   // Clear changes and errors when camera selection changes
   useEffect(() => {
@@ -85,32 +85,19 @@ export function Settings() {
 
     setIsSaving(true)
     const camId = parseInt(selectedCamera, 10)
-    let successCount = 0
-    let errorCount = 0
 
     try {
-      for (const [param, value] of Object.entries(changes)) {
-        try {
-          await updateConfigMutation.mutateAsync({
-            camId,
-            param,
-            value: String(value),
-          })
-          successCount++
-        } catch (err) {
-          console.error(`Failed to update ${param}:`, err)
-          errorCount++
-        }
-      }
+      // Use batch API - send all changes in one request
+      await batchUpdateConfigMutation.mutateAsync({
+        camId,
+        changes,
+      })
 
-      if (errorCount === 0) {
-        addToast(`Successfully saved ${successCount} setting(s)`, 'success')
-        setChanges({})
-      } else if (successCount > 0) {
-        addToast(`Saved ${successCount} setting(s), ${errorCount} failed`, 'warning')
-      } else {
-        addToast('Failed to save settings', 'error')
-      }
+      addToast(`Successfully saved ${Object.keys(changes).length} setting(s)`, 'success')
+      setChanges({})
+    } catch (err) {
+      console.error('Failed to save settings:', err)
+      addToast('Failed to save settings', 'error')
     } finally {
       setIsSaving(false)
     }
@@ -339,14 +326,13 @@ export function Settings() {
           error={getError('movie_filename')}
         />
         <FormSelect
-          label="Movie Output Format"
-          value={String(getValue('movie_output', 'mkv'))}
-          onChange={(val) => handleChange('movie_output', val)}
+          label="Movie Container"
+          value={String(getValue('movie_container', 'mkv'))}
+          onChange={(val) => handleChange('movie_container', val)}
           options={[
             { value: 'mkv', label: 'MKV' },
             { value: 'mp4', label: 'MP4' },
-            { value: 'avi', label: 'AVI' },
-            { value: 'mov', label: 'MOV' },
+            { value: '3gp', label: '3GP' },
           ]}
           helpText="Container format for movies"
         />

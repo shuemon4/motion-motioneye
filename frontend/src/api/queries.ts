@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiGet, apiPost, apiDelete } from './client';
+import { apiGet, apiPost, apiDelete, apiPatch } from './client';
 import { setCsrfToken } from './csrf';
 import type {
   MotionConfig,
@@ -95,7 +95,7 @@ export function useAuth() {
   });
 }
 
-// Update config parameter
+// Update config parameter (legacy - single parameter)
 // Motion's API uses POST /{camId}/config/set?param=value
 export function useUpdateConfig() {
   const queryClient = useQueryClient();
@@ -112,6 +112,29 @@ export function useUpdateConfig() {
     }) => {
       // Motion expects query parameters, not JSON body
       return apiPost(`/${camId}/config/set?${param}=${encodeURIComponent(value)}`, {});
+    },
+    onSuccess: (_, { camId }) => {
+      // Invalidate config cache to refetch fresh data
+      queryClient.invalidateQueries({ queryKey: queryKeys.config(camId) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.cameras });
+    },
+  });
+}
+
+// Batch update config parameters (new JSON API)
+// PATCH /{camId}/api/config with JSON body
+export function useBatchUpdateConfig() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      camId,
+      changes,
+    }: {
+      camId: number;
+      changes: Record<string, string | number | boolean>;
+    }) => {
+      return apiPatch(`/${camId}/api/config`, changes);
     },
     onSuccess: (_, { camId }) => {
       // Invalidate config cache to refetch fresh data

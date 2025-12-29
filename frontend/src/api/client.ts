@@ -198,6 +198,100 @@ export async function apiPost<T>(
 }
 
 /**
+ * PATCH request for batch configuration updates
+ */
+export async function apiPatch<T>(
+  endpoint: string,
+  data: Record<string, unknown>,
+  retryCount = 0
+): Promise<T> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT);
+
+  const token = getCsrfToken();
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        ...(token && { 'X-CSRF-Token': token }),
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(data),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    // Handle authentication errors
+    if (response.status === 401) {
+      authErrorCallback?.(401);
+      throw new ApiClientError('Authentication required', 401);
+    }
+
+    // Handle 403 - token may be stale (Motion restarted)
+    if (response.status === 403) {
+      invalidateCsrfToken();
+
+      // Refetch config to get new token
+      const configResponse = await fetch('/0/api/config');
+      if (configResponse.ok) {
+        const config = await configResponse.json();
+        if (config.csrf_token) {
+          setCsrfToken(config.csrf_token);
+
+          // Retry with new token
+          const retryResponse = await fetch(endpoint, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-CSRF-Token': config.csrf_token,
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(data),
+          });
+
+          if (!retryResponse.ok) {
+            // If still failing, could be an auth issue
+            if (retryResponse.status === 401 || retryResponse.status === 403) {
+              authErrorCallback?.(retryResponse.status);
+            }
+            throw new ApiClientError('CSRF validation failed after retry', 403);
+          }
+
+          const text = await retryResponse.text();
+          return text ? JSON.parse(text) : ({} as T);
+        }
+      }
+      throw new ApiClientError('CSRF validation failed', 403);
+    }
+
+    // Handle transient errors with retry
+    if (isTransientError(response.status) && retryCount < MAX_RETRIES) {
+      await sleep(1000 * (retryCount + 1)); // Exponential backoff
+      return apiPatch<T>(endpoint, data, retryCount + 1);
+    }
+
+    if (!response.ok) {
+      throw new ApiClientError(`HTTP ${response.status}: ${response.statusText}`, response.status);
+    }
+
+    const text = await response.text();
+    return text ? JSON.parse(text) : ({} as T);
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error instanceof ApiClientError) throw error;
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new ApiClientError('Request timeout', 408);
+    }
+    throw new ApiClientError(error instanceof Error ? error.message : 'Unknown error');
+  }
+}
+
+/**
  * DELETE request for media file deletion
  */
 export async function apiDelete<T>(endpoint: string): Promise<T> {

@@ -717,6 +717,8 @@ void cls_config::dispatch_edit(const std::string& name, std::string& parm, enum 
     if (name == "libcam_af_range") return edit_generic_int(parm_cam.libcam_af_range, parm, pact, 0, 0, 2);
     // AfSpeed: 0=Normal, 1=Fast
     if (name == "libcam_af_speed") return edit_generic_int(parm_cam.libcam_af_speed, parm, pact, 0, 0, 1);
+    // AfTrigger: 0=Start scan, 1=Cancel (action parameter)
+    if (name == "libcam_af_trigger") return edit_generic_int(parm_cam.libcam_af_trigger, parm, pact, 0, 0, 1);
 
     // BOOLS - libcam AWB parameters
     if (name == "libcam_awb_enable") return edit_generic_bool(parm_cam.libcam_awb_enable, parm, pact, true);

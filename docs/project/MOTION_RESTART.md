@@ -97,3 +97,93 @@ sudo /usr/local/bin/motion -c /etc/motion/motion.conf -d -n &
 - [ ] New process started (`ps aux | grep motion` shows running process)
 - [ ] API endpoints return expected responses
 - [ ] Process start time is AFTER binary modification time
+
+---
+
+## Common Issue: Make Showing "Nothing to be done"
+
+### Symptom
+
+After syncing source files to the Pi, running `make -j4` shows:
+```
+make[2]: Nothing to be done for 'all'.
+```
+
+This happens even when source files have been updated.
+
+### Root Cause
+
+`rsync` preserves file timestamps by default. If you sync files from your Mac to the Pi:
+1. The file's modification timestamp is preserved
+2. Make compares timestamps and sees the `.o` file is newer than the source
+3. Make concludes no rebuild is needed
+
+### Resolution
+
+Force rebuild by touching the modified source files:
+
+```bash
+ssh admin@192.168.1.176 "cd ~/motion-motioneye && touch src/conf.cpp && make -j4"
+```
+
+Or use `rsync` without timestamp preservation:
+```bash
+rsync -avz --no-times --exclude='.git' --exclude='node_modules' \
+  /path/to/file admin@192.168.1.176:~/motion-motioneye/src/
+```
+
+### Prevention
+
+Always touch modified source files after rsync when doing incremental syncs.
+
+---
+
+## Common Issue: Misleading Mac Paths in Makefile
+
+### Symptom
+
+When building on Pi, you see Mac paths in compiler output:
+```
+-I/opt/homebrew/opt/jpeg/include -I/opt/homebrew/Cellar/libmicrohttpd/1.0.2/include
+```
+
+This looks like cross-compilation, but the binary still works.
+
+### Explanation
+
+This happens when:
+1. You ran `./configure` on your Mac (which writes Mac paths to Makefile)
+2. You synced the entire project (including Makefile) to the Pi
+3. Building on Pi uses the synced Makefile with Mac paths
+
+**The binary still works because:**
+- The Pi's g++ ignores non-existent include paths
+- System headers are found in default Pi locations
+- The linker finds Pi-native libraries
+
+### Verification
+
+Check the compiled binary architecture:
+```bash
+file ~/motion-motioneye/src/motion
+# Should show: ELF 64-bit LSB pie executable, ARM aarch64
+```
+
+### Resolution (if needed)
+
+If you have actual build issues, reconfigure on the Pi:
+
+```bash
+ssh admin@192.168.1.176 "cd ~/motion-motioneye && make clean && autoreconf -fiv && ./configure --with-libcam --with-sqlite3 && make -j4"
+```
+
+This creates a Makefile with Pi-native paths.
+
+### When to Reconfigure
+
+Reconfiguration is only needed when:
+- Adding new library dependencies
+- Library detection fails on Pi
+- Build errors reference missing headers
+
+For typical source code changes (adding parameters, fixing bugs), the synced Mac-configured Makefile works fine.

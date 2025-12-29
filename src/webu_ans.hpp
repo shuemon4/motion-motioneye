@@ -41,6 +41,7 @@
 
             enum WEBUI_RESP resp_type;      /* indicator for the type of response to provide. */
             std::string     resp_page;      /* The response that will be sent */
+            std::string     raw_body;       /* Accumulated POST/PATCH body for JSON endpoints */
 
             int             camindx;        /* Index number of the cam */
             int             device_id;      /* Device id number requested */

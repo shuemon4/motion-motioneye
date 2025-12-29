@@ -37,6 +37,7 @@
             void api_system_status();
             void api_cameras();
             void api_config();
+            void api_config_patch();  /* Batch config update via PATCH */
 
         private:
             cls_motapp      *app;

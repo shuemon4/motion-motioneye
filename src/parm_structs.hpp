@@ -155,6 +155,7 @@ struct ctx_parm_cam {
     float           libcam_lens_position;   // Dioptres (0=infinity, 2=0.5m)
     int             libcam_af_range;        // 0=Normal, 1=Macro, 2=Full
     int             libcam_af_speed;        // 0=Normal, 1=Fast
+    int             libcam_af_trigger;      // 0=Start AF scan, 1=Cancel (action param)
 
     /* Image parameters (PARM_CAT_03) */
     int             width;

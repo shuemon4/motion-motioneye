@@ -34,6 +34,7 @@ motion_SOURCES = \
 	dbse.hpp           dbse.cpp \
 	draw.hpp           draw.cpp \
 	jpegutils.hpp      jpegutils.cpp \
+	json_parse.hpp     json_parse.cpp \
 	libcam.hpp         libcam.cpp \
 	logger.hpp         logger.cpp \
 	motion.hpp         motion.cpp \
