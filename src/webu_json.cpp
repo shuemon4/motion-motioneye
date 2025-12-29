@@ -884,6 +884,43 @@ void cls_webu_json::api_system_temperature()
     webua->resp_type = WEBUI_RESP_JSON;
 }
 
+/*
+ * React UI API: Cameras list
+ * Returns list of configured cameras
+ */
+void cls_webu_json::api_cameras()
+{
+    int indx_cam;
+    std::string strid;
+    cls_camera *cam;
+
+    webua->resp_page = "{\"cameras\":[";
+
+    for (indx_cam=0; indx_cam<app->cam_cnt; indx_cam++) {
+        cam = app->cam_list[indx_cam];
+        strid = std::to_string(cam->cfg->device_id);
+
+        if (indx_cam > 0) {
+            webua->resp_page += ",";
+        }
+
+        webua->resp_page += "{";
+        webua->resp_page += "\"id\":" + strid + ",";
+
+        if (cam->cfg->device_name == "") {
+            webua->resp_page += "\"name\":\"camera " + strid + "\",";
+        } else {
+            webua->resp_page += "\"name\":\"" + escstr(cam->cfg->device_name) + "\",";
+        }
+
+        webua->resp_page += "\"url\":\"" + webua->hostfull + "/" + strid + "/\"";
+        webua->resp_page += "}";
+    }
+
+    webua->resp_page += "]}";
+    webua->resp_type = WEBUI_RESP_JSON;
+}
+
 void cls_webu_json::main()
 {
     pthread_mutex_lock(&app->mutex_post);

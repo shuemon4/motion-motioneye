@@ -31,6 +31,7 @@
             void api_auth_me();
             void api_media_pictures();
             void api_system_temperature();
+            void api_cameras();
 
         private:
             cls_motapp      *app;

@@ -1,50 +1,92 @@
-# Motion - Claude Code Instructions
+# Motion-MotionEye - Claude Code Instructions
 
 ## Project Identity
 
-**What**: Fork of [Motion](https://github.com/Motion-Project/motion) - C++ video motion detection daemon
-**Target**: Raspberry Pi 5 with Camera Module v3 (IMX708)
-**Language**: C++17
-**Build**: GNU Autotools (autoconf/automake)
+**What**: Combined Motion + MotionEye - C++ video motion detection daemon with modern React UI
+**Origin**: Fork of [Motion](https://github.com/Motion-Project/motion), updated for 64-bit systems with integrated web interface
+**Target**: Raspberry Pi 4 and newer (64-bit)
+**Languages**: C++17 (backend), TypeScript/React (frontend)
+**Build**: GNU Autotools (backend), Vite (frontend)
 **License**: GPL v3+
 
-## Current Focus
+## Project Context
 
-Updating `cls_libcam` for native Pi 5 + Camera v3 support. Core motion detection algorithm (`cls_alg`) is proven and must be preserved.
+This project combines Motion and MotionEye into a single, efficient application:
+
+1. **Motion** (C++ daemon) - Updated for 64-bit systems and optimized from the original Motion project
+2. **MotionEye** (React UI) - Complete rebuild using modern, efficient code. The original Python-based MotionEye at `/Users/tshuey/Documents/GitHub/motioneye/` is used as feature reference only
+3. **No Python backend** - React talks directly to Motion's C++ API via libmicrohttpd
+4. **Legacy UI removal** - Motion's original embedded HTML UI will be removed (task TBD)
+
+## Core Principles
 
 - Answer directly, avoid unnecessary preambles/postambles
-- Be concise.
+- Be concise
+- **CPU efficiency is paramount** - Pi has limited CPU, generates heat, may run on battery. Always consider CPU impact in all code changes
 
 ## Project Rules
 
-1. **Plans** MUST be documented in `~/doc/plans/`
-2. **Use scratchpads for working memory** - create and use files in `doc/scratchpads/` for notes, research findings, and intermediate work
+1. **Plans** MUST be documented in `docs/plans/`
+2. **Use scratchpads for working memory** - create and use files in `docs/scratchpads/` for notes, research findings, and intermediate work
 3. **Do not guess** - ask questions and/or research for answers
 4. **Preserve `cls_alg`** - the motion detection algorithm works; don't modify unless explicitly asked
 5. **Evidence over assumptions** - verify changes work on actual hardware when possible
-6. **Minimize CPU usage** - the Pi has limited CPU, generates heat, and may run on battery; always consider CPU impact when developing code changes
+6. **Minimize CPU usage** - always consider CPU impact when developing code changes
+7. **Efficiency first** - all new code must be planned for efficiency before implementation
+
+## Technology Stack
+
+| Layer | Technology |
+|-------|------------|
+| Backend | Motion C++17 |
+| Web Server | libmicrohttpd (built into Motion) |
+| Frontend | React 18 + TypeScript + Vite |
+| Styling | Tailwind CSS |
+| State | Zustand |
+| Data Fetching | TanStack Query |
+
+## Project Structure
+
+```
+motion-motioneye/
+├── src/                    # Motion C++ backend
+│   ├── webu_file.cpp       # Static file serving + SPA support
+│   ├── webu_json.cpp       # JSON API endpoints
+│   ├── webu_stream.cpp     # MJPEG streaming
+│   ├── conf.cpp            # Configuration parameters
+│   └── ...
+├── frontend/               # React UI application
+│   ├── src/
+│   ├── public/
+│   └── package.json
+├── data/
+│   └── webui/              # Built frontend assets (installed)
+└── docs/                   # Documentation
+    ├── project/            # Architecture and patterns
+    ├── plans/              # Implementation plans (REQUIRED)
+    └── scratchpads/        # Working documents
+```
 
 ## Quick Navigation
 
 | Need | Location |
 |------|----------|
-| Architecture overview | `doc/project/ARCHITECTURE.md` |
-| Code patterns | `doc/project/PATTERNS.md` |
-| How to modify | `doc/project/MODIFICATION_GUIDE.md` |
-| Agent quick-ref | `doc/project/AGENT_GUIDE.md` |
-| Pi 5 implementation plan | `doc/scratchpads/pi5-camv3-implementation.md` |
-| Detailed design | `doc/plans/Pi5-CamV3-Implementation-Design.md` |
+| React UI plans | `docs/plans/react-ui/README.md` |
+| Architecture overview | `docs/project/ARCHITECTURE.md` |
+| Code patterns | `docs/project/PATTERNS.md` |
+| How to modify | `docs/project/MODIFICATION_GUIDE.md` |
+| Agent quick-ref | `docs/project/AGENT_GUIDE.md` |
 
-## Key Files for Current Work
+## Key Files
 
-### Must Modify (Pi 5 Support)
+### Backend (C++)
 
 | File | Purpose |
 |------|---------|
-| `src/libcam.cpp` | libcamera capture - stream role, buffers, camera selection |
-| `src/libcam.hpp` | libcamera class interface |
+| `src/libcam.cpp` | libcamera capture - Pi camera support |
 | `src/conf.cpp` | Configuration parameters (~600 params) |
-| `src/conf.hpp` | Config class definition |
+| `src/webu_json.cpp` | JSON API for frontend |
+| `src/webu_file.cpp` | Static file serving |
 
 ### Do Not Modify (Unless Explicitly Asked)
 
@@ -54,20 +96,25 @@ Updating `cls_libcam` for native Pi 5 + Camera v3 support. Core motion detection
 | `src/alg.hpp` | Algorithm interface |
 | `src/alg_sec.cpp` | Secondary detection methods |
 
-### May Need Adjustment
+### Frontend (React)
 
-| File | Purpose |
-|------|---------|
-| `src/camera.cpp` | Camera processing loop - may need frame handling tweaks |
-| `src/movie.cpp` | Video recording via FFmpeg - verify encoder compatibility |
-| `configure.ac` | Build configuration - libcamera detection |
+| Location | Purpose |
+|----------|---------|
+| `frontend/src/` | React application source |
+| `frontend/package.json` | Frontend dependencies |
+
+### Reference Only
+
+| Location | Purpose |
+|----------|---------|
+| `/Users/tshuey/Documents/GitHub/motioneye/` | Original MotionEye - feature reference for UI rebuild |
 
 ## Build Commands
 
-### Development Build (Pi 5)
+### Backend (C++ Motion)
 
 ```bash
-# Install dependencies
+# Install dependencies (Pi)
 sudo apt install libcamera-dev libcamera-tools libjpeg-dev \
   libavcodec-dev libavformat-dev libavutil-dev libswscale-dev \
   libmicrohttpd-dev libsqlite3-dev autoconf automake libtool pkgconf
@@ -81,16 +128,13 @@ make -j4
 ./motion -c /path/to/motion.conf -n -d
 ```
 
-### Target Build Configuration
+### Frontend (React)
 
 ```bash
-./configure \
-  --with-libcam \
-  --with-sqlite3 \
-  --without-v4l2 \
-  --without-mysql \
-  --without-mariadb \
-  --without-pgsql
+cd frontend
+npm install
+npm run dev      # Development server
+npm run build    # Production build
 ```
 
 ## Testing on Raspberry Pi
@@ -112,76 +156,35 @@ SSH keys configured for passwordless access from the development Mac.
 
 1. **Sync code to Pi:**
    ```bash
-   rsync -avz --exclude='.git' --exclude='__pycache__' --exclude='*.pyc' --exclude='.venv' /Users/tshuey/Documents/GitHub/motioneye/ admin@192.168.1.176:~/motioneye/
+   rsync -avz --exclude='.git' --exclude='node_modules' --exclude='.venv' \
+     /Users/tshuey/Documents/GitHub/motion-motioneye/ admin@192.168.1.176:~/motion-motioneye/
    ```
 
-2. **Install on Pi:**
+2. **Build on Pi:**
    ```bash
-   ssh admin@192.168.1.176 "cd ~/motioneye && sudo pip3 install . --break-system-packages"
+   ssh admin@192.168.1.176 "cd ~/motion-motioneye && autoreconf -fiv && ./configure --with-libcam --with-sqlite3 && make -j4"
    ```
 
 3. **Restart service:**
    ```bash
-   ssh admin@192.168.1.176 "sudo systemctl restart motioneye"
+   ssh admin@192.168.1.176 "sudo systemctl restart motion"
    ```
 
 4. **Check logs:**
    ```bash
-   ssh admin@192.168.1.176 "sudo journalctl -u motioneye -n 50 --no-pager"
+   ssh admin@192.168.1.176 "sudo journalctl -u motion -n 50 --no-pager"
    ```
 
 ### Verify Camera Streaming
 
-Test Motion stream directly:
 ```bash
 ssh admin@192.168.1.176 "curl -s --max-time 3 'http://localhost:7999/1/mjpg/stream' -o /tmp/test.dat && file /tmp/test.dat"
 ```
 
-Access MotionEye web interface: `http://192.168.1.176:8765/`
-
 ### Common Issues
 
 - **Port conflicts**: Kill orphaned motion processes with `sudo pkill -9 motion`
-- **Permission errors**: Ensure `/etc/motioneye` is owned by `motion:motion`
 - **Camera not detected**: Verify with `rpicam-hello --list-cameras`
-
----
-
-## Deploying to Pi
-
-### Transfer Code to Pi
-
-**Option A: Git clone (if pushed)**
-```bash
-# On Pi
-git clone https://github.com/YOUR_USERNAME/motion.git
-cd motion
-git checkout your-branch
-```
-
-**Option B: Direct transfer**
-```bash
-# From Windows
-scp -r "C:\Users\Trent\Documents\GitHub\motion" pi@RPI_IP:~/
-```
-
-### Build on Pi
-
-```bash
-cd ~/motion
-autoreconf -fiv
-./configure --with-libcam --with-sqlite3
-make -j4
-sudo make install
-```
-
-### Restart Service After Changes
-
-```bash
-sudo systemctl restart motion
-# or run in foreground for debugging:
-sudo motion -c /etc/motion/motion.conf -n -d
-```
 
 ## Code Patterns
 
@@ -204,62 +207,28 @@ sudo motion -c /etc/motion/motion.conf -n -d
 - Per-camera thread: Capture & detection
 - Web server: libmicrohttpd thread pool
 
-### Image Buffers
-
-- Ring buffer for pre/post capture
-- Triple buffer pattern for network cameras (latest/receiving/processing)
-
-## libcamera-Specific Context
-
-### Current Issues (Why Fixing)
-
-1. Uses `StreamRole::Viewfinder` instead of `VideoRecording`
-2. Single buffer allocation causes pipeline issues on Pi 5's ISP
-3. No filtering of USB cameras from CSI cameras
-
-### Key Fixes Applied/Needed
-
-See `doc/scratchpads/pi5-camv3-implementation.md` for detailed implementation plan.
-
-### Camera v3 Features to Support
-
-- Autofocus (AfMode, AfRange, LensPosition)
-- HDR mode
-- Wide angle lens variant
-
-## Success Criteria
-
-1. Camera v3 detected on Pi 5 startup
-2. Consistent 30fps @ 1920x1080 capture
-3. Motion detection performs identically to proven algorithm
-4. H.264 recording works with proper timestamps
-5. 24+ hour stability
-
 ## Documentation Structure
-- Not up-to-date
+
 ```
-doc/
+docs/
 ├── project/           # AI agent reference docs
 │   ├── AGENT_GUIDE.md
 │   ├── ARCHITECTURE.md
 │   ├── PATTERNS.md
 │   └── MODIFICATION_GUIDE.md
 ├── plans/             # Implementation plans (REQUIRED for all plans)
-│   ├── Pi5-CamV3-Implementation-Design.md
-│   └── MotionUpdate-Pi5-CamV3.md
+│   └── react-ui/      # React UI integration plans
 └── scratchpads/       # Working documents
-    └── pi5-camv3-implementation.md
 ```
 
 ### Documentation Naming
 
 - **Subdirectories** (`plans/`, `scratchpads/`, `reviews/`, etc.): Use timestamp prefix `YYYYMMDD-hhmm-`
-  - Example: `20251216-2036-Pi5-CamV3-Implementation-Design.md`
+  - Example: `20251216-2036-Feature-Implementation.md`
   - Format: Date in YYYYMMDD, time in hhmm (24-hour), then descriptive name
 
-- **Main `doc/` directory files** (project reference docs): No prefix required
-  - Examples: `motion_build.html`, `copyright`, `motion.gif`
+- **Main `docs/` directory files** (project reference docs): No prefix required
 
 ## Reading Files
 
-**Caution** Some files in this project are very large intentionally
+**Caution**: Some files in this project are very large intentionally

@@ -971,6 +971,9 @@ void cls_webu_ans::answer_get()
         } else if (uri_cmd2 == "system" && uri_cmd3 == "temperature") {
             webu_json->api_system_temperature();
             mhd_send();
+        } else if (uri_cmd2 == "cameras") {
+            webu_json->api_cameras();
+            mhd_send();
         } else {
             bad_request();
         }
