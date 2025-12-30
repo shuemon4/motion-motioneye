@@ -50,7 +50,7 @@ jobs:
         if: matrix.libc == 'glibc'
         run: |
           sudo apt-get update
-          sudo apt-get install -y autopoint pkgconf gettext libcamera-dev libopencv-dev libavcodec-dev libavdevice-dev libavformat-dev libavutil-dev libswscale-dev libwebp-dev libmicrohttpd-dev libmariadb-dev libasound2-dev libpulse-dev libfftw3-dev
+          sudo apt-get install -y autoconf automake libtool autopoint pkgconf gettext libcamera-dev libopencv-dev libavcodec-dev libavdevice-dev libavformat-dev libavutil-dev libswscale-dev libwebp-dev libmicrohttpd-dev libmariadb-dev libasound2-dev libpulse-dev libfftw3-dev
 
       - name: Set up Alpine
         if: matrix.libc == 'musl'
@@ -63,8 +63,8 @@ jobs:
             file
             autoconf
             automake
-            gettext-dev
             libtool
+            gettext-dev
             libzip-dev
             jpeg-dev
             v4l-utils-libs
@@ -84,7 +84,7 @@ jobs:
       - name: Configure build
         run: |
           autoreconf -fiv
-          ./configure CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}
+          CONFIG_SHELL=/bin/bash ./configure CC=${{ matrix.cc }} CXX=${{ matrix.cxx }}
 
       - name: Build target
         run: |
