@@ -1143,8 +1143,10 @@ mhdrslt cls_webu_ans::answer_main(struct MHD_Connection *p_connection
         mhd_first = false;
         if (mystreq(method,"POST")) {
             cnct_method = WEBUI_METHOD_POST;
-            /* Check if this is a JSON API endpoint (mask API) */
-            if (uri_cmd1 == "api" && uri_cmd2 == "mask" && uri_cmd3 != "") {
+            /* Check if this is a JSON API endpoint (mask API, power control) */
+            if ((uri_cmd1 == "api" && uri_cmd2 == "mask" && uri_cmd3 != "") ||
+                (uri_cmd1 == "api" && uri_cmd2 == "system" &&
+                 (uri_cmd3 == "reboot" || uri_cmd3 == "shutdown"))) {
                 raw_body.clear();  /* Clear body buffer for JSON POST */
                 retcd = MHD_YES;
             } else {
@@ -1184,6 +1186,22 @@ mhdrslt cls_webu_ans::answer_main(struct MHD_Connection *p_connection
                 webu_json = new cls_webu_json(this);
             }
             webu_json->api_mask_post();
+            mhd_send();
+            retcd = MHD_YES;
+        } else if (uri_cmd1 == "api" && uri_cmd2 == "system" && uri_cmd3 == "reboot") {
+            /* System reboot - no body needed */
+            if (webu_json == nullptr) {
+                webu_json = new cls_webu_json(this);
+            }
+            webu_json->api_system_reboot();
+            mhd_send();
+            retcd = MHD_YES;
+        } else if (uri_cmd1 == "api" && uri_cmd2 == "system" && uri_cmd3 == "shutdown") {
+            /* System shutdown - no body needed */
+            if (webu_json == nullptr) {
+                webu_json = new cls_webu_json(this);
+            }
+            webu_json->api_system_shutdown();
             mhd_send();
             retcd = MHD_YES;
         } else {

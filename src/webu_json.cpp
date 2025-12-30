@@ -30,6 +30,7 @@
 #include <map>
 #include <algorithm>
 #include <vector>
+#include <thread>
 #include <sys/statvfs.h>
 
 /* CPU-efficient polygon fill using scanline algorithm
@@ -1153,6 +1154,120 @@ void cls_webu_json::api_system_status()
 
     webua->resp_page += "}";
     webua->resp_type = WEBUI_RESP_JSON;
+}
+
+/*
+ * React UI API: System reboot
+ * POST /0/api/system/reboot
+ * Requires CSRF token and authentication
+ */
+void cls_webu_json::api_system_reboot()
+{
+    webua->resp_type = WEBUI_RESP_JSON;
+
+    /* Validate CSRF token */
+    const char* csrf_token = MHD_lookup_connection_value(
+        webua->connection, MHD_HEADER_KIND, "X-CSRF-Token");
+    if (csrf_token == nullptr || !webu->csrf_validate(std::string(csrf_token))) {
+        MOTION_LOG(ERR, TYPE_STREAM, NO_ERRNO,
+            _("CSRF token validation failed for reboot from %s"), webua->clientip.c_str());
+        webua->resp_page = "{\"error\":\"CSRF validation failed\"}";
+        return;
+    }
+
+    /* Check if power control is enabled via webcontrol_actions */
+    bool power_enabled = false;
+    for (int indx = 0; indx < webu->wb_actions->params_cnt; indx++) {
+        if (webu->wb_actions->params_array[indx].param_name == "power") {
+            if (webu->wb_actions->params_array[indx].param_value == "on") {
+                power_enabled = true;
+            }
+            break;
+        }
+    }
+
+    if (!power_enabled) {
+        MOTION_LOG(INF, TYPE_ALL, NO_ERRNO,
+            "Reboot request denied - power control disabled (from %s)", webua->clientip.c_str());
+        webua->resp_page = "{\"error\":\"Power control is disabled\"}";
+        return;
+    }
+
+    /* Log the reboot request */
+    MOTION_LOG(NTC, TYPE_ALL, NO_ERRNO,
+        "System reboot requested by %s", webua->clientip.c_str());
+
+    /* Schedule reboot with 2-second delay to allow HTTP response to complete */
+    std::thread([]() {
+        sleep(2);
+        /* Try reboot commands in sequence (like MotionEye) */
+        if (system("sudo /sbin/reboot") != 0) {
+            if (system("sudo /sbin/shutdown -r now") != 0) {
+                if (system("sudo /usr/bin/systemctl reboot") != 0) {
+                    system("sudo /sbin/init 6");
+                }
+            }
+        }
+    }).detach();
+
+    webua->resp_page = "{\"success\":true,\"operation\":\"reboot\",\"message\":\"System will reboot in 2 seconds\"}";
+}
+
+/*
+ * React UI API: System shutdown
+ * POST /0/api/system/shutdown
+ * Requires CSRF token and authentication
+ */
+void cls_webu_json::api_system_shutdown()
+{
+    webua->resp_type = WEBUI_RESP_JSON;
+
+    /* Validate CSRF token */
+    const char* csrf_token = MHD_lookup_connection_value(
+        webua->connection, MHD_HEADER_KIND, "X-CSRF-Token");
+    if (csrf_token == nullptr || !webu->csrf_validate(std::string(csrf_token))) {
+        MOTION_LOG(ERR, TYPE_STREAM, NO_ERRNO,
+            _("CSRF token validation failed for shutdown from %s"), webua->clientip.c_str());
+        webua->resp_page = "{\"error\":\"CSRF validation failed\"}";
+        return;
+    }
+
+    /* Check if power control is enabled via webcontrol_actions */
+    bool power_enabled = false;
+    for (int indx = 0; indx < webu->wb_actions->params_cnt; indx++) {
+        if (webu->wb_actions->params_array[indx].param_name == "power") {
+            if (webu->wb_actions->params_array[indx].param_value == "on") {
+                power_enabled = true;
+            }
+            break;
+        }
+    }
+
+    if (!power_enabled) {
+        MOTION_LOG(INF, TYPE_ALL, NO_ERRNO,
+            "Shutdown request denied - power control disabled (from %s)", webua->clientip.c_str());
+        webua->resp_page = "{\"error\":\"Power control is disabled\"}";
+        return;
+    }
+
+    /* Log the shutdown request */
+    MOTION_LOG(NTC, TYPE_ALL, NO_ERRNO,
+        "System shutdown requested by %s", webua->clientip.c_str());
+
+    /* Schedule shutdown with 2-second delay to allow HTTP response to complete */
+    std::thread([]() {
+        sleep(2);
+        /* Try shutdown commands in sequence (like MotionEye) */
+        if (system("sudo /sbin/poweroff") != 0) {
+            if (system("sudo /sbin/shutdown -h now") != 0) {
+                if (system("sudo /usr/bin/systemctl poweroff") != 0) {
+                    system("sudo /sbin/init 0");
+                }
+            }
+        }
+    }).detach();
+
+    webua->resp_page = "{\"success\":true,\"operation\":\"shutdown\",\"message\":\"System will shut down in 2 seconds\"}";
 }
 
 /*

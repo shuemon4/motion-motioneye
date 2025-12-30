@@ -32,6 +32,8 @@
             void api_delete_movie();
             void api_system_temperature();
             void api_system_status();
+            void api_system_reboot();     /* POST /0/api/system/reboot */
+            void api_system_shutdown();   /* POST /0/api/system/shutdown */
             void api_cameras();
             void api_config();
             void api_config_patch();  /* Batch config update via PATCH */

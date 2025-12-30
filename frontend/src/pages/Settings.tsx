@@ -15,6 +15,7 @@ import { MovieSettings } from '@/components/settings/MovieSettings'
 import { StorageSettings } from '@/components/settings/StorageSettings'
 import { ScheduleSettings } from '@/components/settings/ScheduleSettings'
 import { PreferencesSettings } from '@/components/settings/PreferencesSettings'
+import { systemReboot, systemShutdown } from '@/api/system'
 
 interface MotionConfig {
   version: string
@@ -303,22 +304,46 @@ export function Settings() {
           <h4 className="font-medium mb-3 text-sm">Device Controls</h4>
           <div className="flex gap-3">
             <button
-              disabled
-              className="px-4 py-2 bg-yellow-600/20 text-yellow-300 rounded-lg text-sm opacity-50 cursor-not-allowed"
-              title="Coming soon - requires backend API"
+              onClick={async () => {
+                if (window.confirm('Are you sure you want to reboot the Pi? The system will restart and be unavailable for about a minute.')) {
+                  try {
+                    await systemReboot()
+                    addToast('Rebooting... The system will be back online shortly.', 'info')
+                  } catch (error: unknown) {
+                    const err = error as { message?: string }
+                    addToast(
+                      err.message || 'Failed to reboot. Power control may be disabled in config.',
+                      'error'
+                    )
+                  }
+                }
+              }}
+              className="px-4 py-2 bg-yellow-600/20 text-yellow-300 hover:bg-yellow-600/30 rounded-lg text-sm transition-colors"
             >
               Restart Pi
             </button>
             <button
-              disabled
-              className="px-4 py-2 bg-red-600/20 text-red-300 rounded-lg text-sm opacity-50 cursor-not-allowed"
-              title="Coming soon - requires backend API"
+              onClick={async () => {
+                if (window.confirm('Are you sure you want to shutdown the Pi? You will need to physically power it back on.')) {
+                  try {
+                    await systemShutdown()
+                    addToast('Shutting down... The system will power off.', 'warning')
+                  } catch (error: unknown) {
+                    const err = error as { message?: string }
+                    addToast(
+                      err.message || 'Failed to shutdown. Power control may be disabled in config.',
+                      'error'
+                    )
+                  }
+                }
+              }}
+              className="px-4 py-2 bg-red-600/20 text-red-300 hover:bg-red-600/30 rounded-lg text-sm transition-colors"
             >
               Shutdown Pi
             </button>
           </div>
           <p className="text-xs text-gray-500 mt-2">
-            Device controls require backend API implementation (coming soon)
+            Requires <code className="text-xs bg-surface-base px-1 rounded">webcontrol_actions power=on</code> in config
           </p>
         </div>
       </FormSection>
